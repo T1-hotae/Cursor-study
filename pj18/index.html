@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>사진 전시회 | Photo Exhibition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --wall: #f5f0e8;
+      --frame: #2c2419;
+      --frame-light: #4a4035;
+      --mat: #e8e2d8;
+      --text: #1a1612;
+      --text-muted: #6b6359;
+      --accent: #8b7355;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: var(--wall);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* 갤러리 벽 질감 느낌 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: 
+        radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.4) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(200,190,180,0.2) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .gallery {
+      position: relative;
+      z-index: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 3rem 2rem 4rem;
+    }
+
+    /* 헤더 */
+    header {
+      text-align: center;
+      margin-bottom: 4rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid rgba(44, 36, 25, 0.12);
+    }
+
+    .exhibition-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--frame);
+      margin-bottom: 0.5rem;
+    }
+
+    .exhibition-subtitle {
+      font-size: 0.95rem;
+      font-weight: 300;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+    }
+
+    /* 전시 그리드 - 벽에 걸린 액자 느낌 */
+    .exhibition-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 2.5rem;
+      align-items: start;
+    }
+
+    .artwork {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: transform 0.35s ease;
+    }
+
+    .artwork:hover {
+      transform: translateY(-4px);
+    }
+
+    /* 액자 */
+    .frame {
+      background: var(--frame);
+      padding: 12px;
+      padding-bottom: 14px;
+      border-radius: 2px;
+      box-shadow: 
+        0 8px 24px rgba(44, 36, 25, 0.25),
+        0 2px 6px rgba(44, 36, 25, 0.15),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      position: relative;
+    }
+
+    .frame::before {
+      content: '';
+      position: absolute;
+      inset: 6px;
+      border: 1px solid var(--frame-light);
+      border-radius: 1px;
+      pointer-events: none;
+    }
+
+    /* 마티 (액자 안쪽 여백) */
+    .mat {
+      background: var(--mat);
+      padding: 14px;
+      display: block;
+    }
+
+    .mat img {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+      object-fit: cover;
+      vertical-align: middle;
+    }
+
+    /* 작품 캡션 */
+    .caption {
+      margin-top: 1.25rem;
+      text-align: center;
+    }
+
+    .caption .title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .caption .author {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      font-weight: 300;
+    }
+
+    /* 로딩 상태 */
+    .artwork.loading .mat {
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--mat);
+    }
+
+    .artwork.loading .mat::after {
+      content: '';
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--frame-light);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 푸터 */
+    footer {
+      text-align: center;
+      margin-top: 4rem;
+      padding-top: 2rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="gallery">
+    <header>
+      <h1 class="exhibition-title">사진 전시회</h1>
+      <p class="exhibition-subtitle">PHOTO EXHIBITION · 30 PIECES</p>
+    </header>
+
+    <div class="exhibition-grid" id="exhibitionGrid"></div>
+
+    <footer>
+      이미지 제공: <a href="https://picsum.photos" target="_blank" rel="noopener">Lorem Picsum</a>
+    </footer>
+  </div>
+
+  <script>
+    const IMAGE_COUNT = 30;
+    const SIZE = 300;
+    const TITLES = [
+      '빛과 그림자', '순간', '고요', '여정', '빈티지', '도시의 밤', '숲속', '창밖',
+      '추억', '몽환', '일상', '고독', '만남', '이별', '새벽', '노을', '비', '눈',
+      '바다', '산', '꽃', '거리', '창', '계단', '다리', '창가', '정원', '카페', '길', '하늘'
+    ];
+    const AUTHORS = [
+      'Anonymous', 'Unknown Artist', 'Guest Photographer', 'Exhibition Contributor'
+    ];
+
+    const grid = document.getElementById('exhibitionGrid');
+
+    for (let i = 0; i < IMAGE_COUNT; i++) {
+      const id = (i % 100) + 1; // Picsum은 id 1~1000 정도 지원
+      const src = `https://picsum.photos/id/${id}/${SIZE}/${SIZE}`;
+      const title = TITLES[i % TITLES.length];
+      const author = AUTHORS[i % AUTHORS.length];
+
+      const artwork = document.createElement('article');
+      artwork.className = 'artwork loading';
+      artwork.innerHTML = `
+        <div class="frame">
+          <div class="mat">
+            <img 
+              src="${src}" 
+              alt="${title}" 
+              loading="lazy"
+              onload="this.closest('.artwork').classList.remove('loading')"
+              onerror="this.src='https://picsum.photos/seed/${i + 100}/${SIZE}/${SIZE}'; this.closest('.artwork').classList.remove('loading')"
+            >
+          </div>
+        </div>
+        <div class="caption">
+          <div class="title">${title} #${i + 1}</div>
+          <div class="author">${author}</div>
+        </div>
+      `;
+      grid.appendChild(artwork);
+    }
+  </script>
+</body>
+</html>

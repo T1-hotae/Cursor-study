@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한국 주식 가격 TOP 50</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Malgun Gothic', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .loading, .error {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+    }
+    .error { color: #c00; }
+    table {
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-collapse: collapse;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background: #2c3e50;
+      color: #fff;
+      font-weight: 600;
+    }
+    tr:hover { background: #f8f9fa; }
+    .num { text-align: right; }
+    .up { color: #e74c3c; }
+    .down { color: #3498db; }
+    .refresh {
+      display: block;
+      margin: 0 auto 20px;
+      padding: 10px 24px;
+      background: #2c3e50;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .refresh:hover { background: #34495e; }
+    .basDt { font-size: 12px; color: #666; margin-bottom: 8px; text-align: center; }
+    .dateBar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .dateBar label { font-weight: 600; color: #333; }
+    .dateBar input[type="date"] {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .dateBar .hint { font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>한국 주식 가격 TOP 50 (종가 기준)</h1>
+  <div class="dateBar">
+    <label for="dateInput">기준일자</label>
+    <input type="date" id="dateInput" />
+    <button class="refresh" id="refresh">조회</button>
+    <span class="hint" id="dateHint">선택한 날짜의 장 마감 시점 데이터를 조회합니다.</span>
+  </div>
+  <p class="basDt" id="basDt"></p>
+  <div id="content">
+    <div class="loading" id="loading">데이터 불러오는 중...</div>
+  </div>
+
+  <script>
+    const API_KEY = '1f18d9b61bdd142f59e1b03d3ae1b10728d0403f5d4516068279210534ca9d68';
+    const isLocalServer = typeof location !== 'undefined' && location.origin && location.origin.startsWith('http');
+    const BASE_URL = isLocalServer ? (location.origin + '/api/stock') : '';
+
+    function yyyymmdd(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + m + day;
+    }
+
+    function dateToYyyymmdd(str) {
+      if (!str) return null;
+      return str.replace(/-/g, '');
+    }
+
+    function setDefaultDate() {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      document.getElementById('dateInput').value = y + '-' + m + '-' + d;
+    }
+
+    function fetchPage(basDt, pageNo) {
+      const params = new URLSearchParams({
+        serviceKey: API_KEY,
+        numOfRows: '4000',
+        pageNo: String(pageNo),
+        resultType: 'json',
+        basDt: basDt
+      });
+      return fetch(BASE_URL + '?' + params.toString()).then(r => r.json());
+    }
+
+    function renderTable(items, basDt) {
+      document.getElementById('basDt').textContent = '기준일자: ' + basDt.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+      const rows = items.map((it, i) => {
+        const vs = parseInt(it.vs, 10) || 0;
+        const vsClass = vs > 0 ? 'up' : vs < 0 ? 'down' : '';
+        const fltRt = parseFloat(it.fltRt) || 0;
+        const fltClass = fltRt > 0 ? 'up' : fltRt < 0 ? 'down' : '';
+        return `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(it.itmsNm || '-')}</td>
+            <td>${escapeHtml(it.srtnCd || '-')}</td>
+            <td>${escapeHtml(it.mrktCtg || '-')}</td>
+            <td class="num">${formatNum(it.clpr)}</td>
+            <td class="num ${vsClass}">${vs >= 0 ? '+' : ''}${formatNum(it.vs)}</td>
+            <td class="num ${fltClass}">${formatNum(it.fltRt)}%</td>
+            <td class="num">${formatNum(it.mkp)}</td>
+            <td class="num">${formatNum(it.hipr)}</td>
+            <td class="num">${formatNum(it.lopr)}</td>
+            <td class="num">${formatNum(it.trqu)}</td>
+            <td class="num">${formatNum(it.mrktTotAmt)}</td>
+          </tr>
+        `;
+      }).join('');
+      document.getElementById('content').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>순위</th>
+              <th>종목명</th>
+              <th>단축코드</th>
+              <th>시장</th>
+              <th>종가</th>
+              <th>대비</th>
+              <th>등락률</th>
+              <th>시가</th>
+              <th>고가</th>
+              <th>저가</th>
+              <th>거래량</th>
+              <th>시가총액</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function formatNum(s) {
+      if (s == null || s === '') return '-';
+      const n = parseFloat(String(s).replace(/,/g, ''));
+      if (isNaN(n)) return s;
+      if (n >= 1e12) return (n / 1e12).toFixed(1) + '조';
+      if (n >= 1e8) return (n / 1e8).toFixed(1) + '억';
+      if (n >= 1e4) return (n / 1e4).toFixed(1) + '만';
+      return n.toLocaleString();
+    }
+
+    function showError(msg) {
+      document.getElementById('content').innerHTML = '<div class="error">' + escapeHtml(msg) + '</div>';
+    }
+
+    function load() {
+      const content = document.getElementById('content');
+      content.innerHTML = '<div class="loading" id="loading">데이터 불러오는 중...</div>';
+
+      const dateStr = document.getElementById('dateInput').value;
+      const basDt = dateToYyyymmdd(dateStr);
+      if (!basDt) {
+        showError('기준일자를 선택해 주세요.');
+        return;
+      }
+
+      const maxPages = 5;
+      const allItems = [];
+      let pageNo = 1;
+
+      function next() {
+        fetchPage(basDt, pageNo)
+          .then(res => {
+            const body = res.response?.body || res.body;
+            if (!body) {
+              const msg = res.response?.header?.resultMsg || res.message || JSON.stringify(res).slice(0, 200);
+              showError('API 오류: ' + msg);
+              return;
+            }
+            const items = body.items?.item;
+            const arr = Array.isArray(items) ? items : (items ? [items] : []);
+            allItems.push(...arr);
+            const total = parseInt(body.totalCount, 10) || 0;
+            if (total > pageNo * 4000 && pageNo < maxPages) {
+              pageNo++;
+              next();
+            } else {
+              const byClpr = allItems
+                .map(it => ({ ...it, _clpr: parseInt(String(it.clpr).replace(/,/g, ''), 10) || 0 }))
+                .filter(it => it._clpr > 0);
+              byClpr.sort((a, b) => b._clpr - a._clpr);
+              const top50 = byClpr.slice(0, 50);
+              if (top50.length === 0) {
+                showError('선택한 날짜(' + dateStr + ')에 데이터가 없습니다. 거래일(평일)을 선택해 주세요.');
+                return;
+              }
+              renderTable(top50, basDt);
+            }
+          })
+          .catch(err => showError('연결 실패: ' + err.message));
+      }
+      next();
+    }
+
+    document.getElementById('refresh').addEventListener('click', function() {
+      if (!BASE_URL) {
+        showError('브라우저에서 파일을 직접 열면 API 연결이 되지 않습니다. 터미널에서 "node server.js" 실행 후 http://localhost:3000 으로 접속해 주세요.');
+        return;
+      }
+      load();
+    });
+    setDefaultDate();
+    if (BASE_URL) {
+      load();
+    } else {
+      document.getElementById('content').innerHTML = '<div class="error">API를 사용하려면 터미널에서 <strong>node server.js</strong> 를 실행한 뒤, 브라우저에서 <strong>http://localhost:3000</strong> 으로 접속해 주세요.</div>';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>테트리스</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      font-family: 'Segoe UI', sans-serif;
+      color: #eee;
+    }
+    h1 { margin-bottom: 12px; font-size: 1.8rem; }
+    .game-wrap {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+    }
+    .info {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 140px;
+    }
+    .info p { font-size: 1rem; }
+    .info span { font-weight: bold; color: #00d9ff; }
+    #canvas {
+      display: block;
+      background: #0f0f1a;
+      border: 3px solid #333;
+      border-radius: 4px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      background: #00d9ff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    button:hover { background: #00b8d9; }
+    .hint { margin-top: 16px; font-size: 0.9rem; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>테트리스</h1>
+  <div class="game-wrap">
+    <div class="info">
+      <p>점수: <span id="score">0</span></p>
+      <p>레벨: <span id="level">1</span></p>
+      <p>줄: <span id="lines">0</span></p>
+      <button id="startBtn">시작</button>
+    </div>
+    <canvas id="canvas" width="300" height="600"></canvas>
+  </div>
+  <p class="hint">← → 이동 | ↓ 내리기 | ↑ 회전</p>
+
+  <script>
+    const COLS = 10, ROWS = 20;
+    const BLOCK = 30;
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    // 테트로미노 7종 (4x4에서 1이 블록)
+    const SHAPES = [
+      [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], // I
+      [[1,1],[1,1]],                             // O
+      [[0,1,0],[1,1,1],[0,0,0]],                 // T
+      [[0,1,1],[1,1,0],[0,0,0]],                 // S
+      [[1,1,0],[0,1,1],[0,0,0]],                 // Z
+      [[1,0,0],[1,1,1],[0,0,0]],                 // J
+      [[0,0,1],[1,1,1],[0,0,0]]                  // L
+    ];
+    const COLORS = ['#00d9ff','#ffeb3b','#9c27b0','#4caf50','#f44336','#2196f3','#ff9800'];
+
+    let board = [];
+    let current = null;
+    let next = null;
+    let score = 0, level = 1, lines = 0;
+    let gameLoopId = null;
+    let running = false;
+
+    function initBoard() {
+      board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+    }
+
+    function randomPiece() {
+      const i = Math.floor(Math.random() * SHAPES.length);
+      return { shape: SHAPES[i], color: COLORS[i], x: Math.floor((COLS - SHAPES[i][0].length) / 2), y: 0 };
+    }
+
+    function drawBlock(x, y, color, outline = true) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x * BLOCK + 1, y * BLOCK + 1, BLOCK - 2, BLOCK - 2);
+      if (outline) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x * BLOCK + 1, y * BLOCK + 1, BLOCK - 2, BLOCK - 2);
+      }
+    }
+
+    function draw() {
+      ctx.fillStyle = '#0f0f1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let r = 0; r < ROWS; r++)
+        for (let c = 0; c < COLS; c++)
+          if (board[r][c]) drawBlock(c, r, board[r][c]);
+
+      if (current) {
+        const s = current.shape;
+        for (let r = 0; r < s.length; r++)
+          for (let c = 0; c < s[r].length; c++)
+            if (s[r][c]) drawBlock(current.x + c, current.y + r, current.color);
+      }
+
+      document.getElementById('score').textContent = score;
+      document.getElementById('level').textContent = level;
+      document.getElementById('lines').textContent = lines;
+    }
+
+    function collide(p, dx = 0, dy = 0) {
+      const s = p.shape;
+      for (let r = 0; r < s.length; r++)
+        for (let c = 0; c < s[r].length; c++) {
+          if (!s[r][c]) continue;
+          const ny = p.y + r + dy, nx = p.x + c + dx;
+          if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
+          if (ny >= 0 && board[ny][nx]) return true;
+        }
+      return false;
+    }
+
+    function merge() {
+      const s = current.shape;
+      for (let r = 0; r < s.length; r++)
+        for (let c = 0; c < s[r].length; c++)
+          if (s[r][c]) {
+            const ny = current.y + r, nx = current.x + c;
+            if (ny < 0) { gameOver(); return; }
+            board[ny][nx] = current.color;
+          }
+      clearLines();
+      current = next;
+      next = randomPiece();
+      if (collide(current)) gameOver();
+    }
+
+    function clearLines() {
+      let cleared = 0;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        if (board[r].every(c => c !== 0)) {
+          board.splice(r, 1);
+          board.unshift(Array(COLS).fill(0));
+          cleared++;
+          r++;
+        }
+      }
+      if (cleared > 0) {
+        lines += cleared;
+        score += [0, 100, 300, 500, 800][cleared] * level;
+        level = Math.floor(lines / 10) + 1;
+        restartLoop();
+      }
+    }
+
+    function rotate(p) {
+      const s = p.shape;
+      const n = s.length, m = s[0].length;
+      const out = Array(m).fill(null).map(() => Array(n).fill(0));
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < m; c++)
+          out[c][n - 1 - r] = s[r][c];
+      const prev = p.shape;
+      p.shape = out;
+      if (collide(p)) p.shape = prev;
+    }
+
+    function tick() {
+      if (!current) return;
+      if (collide(current, 0, 1)) merge();
+      else current.y++;
+      draw();
+    }
+
+    function gameOver() {
+      clearInterval(gameLoopId);
+      gameLoopId = null;
+      running = false;
+      document.getElementById('startBtn').textContent = '다시 시작';
+      alert('게임 오버! 점수: ' + score);
+    }
+
+    function restartLoop() {
+      if (gameLoopId) clearInterval(gameLoopId);
+      const ms = Math.max(100, 500 - (level - 1) * 50);
+      gameLoopId = setInterval(tick, ms);
+    }
+
+    function start() {
+      if (running) return;
+      initBoard();
+      score = 0; level = 1; lines = 0;
+      current = randomPiece();
+      next = randomPiece();
+      running = true;
+      document.getElementById('startBtn').textContent = '게임 중';
+      restartLoop();
+      draw();
+    }
+
+    document.getElementById('startBtn').addEventListener('click', start);
+
+    document.addEventListener('keydown', e => {
+      if (!running || !current) return;
+      switch (e.key) {
+        case 'ArrowLeft':
+          if (!collide(current, -1, 0)) current.x--;
+          break;
+        case 'ArrowRight':
+          if (!collide(current, 1, 0)) current.x++;
+          break;
+        case 'ArrowDown':
+          if (!collide(current, 0, 1)) { current.y++; score += 1; }
+          break;
+        case 'ArrowUp':
+          rotate(current);
+          break;
+      }
+      e.preventDefault();
+      draw();
+    });
+
+    initBoard();
+    draw();
+  </script>
+</body>
+</html>
